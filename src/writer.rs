@@ -64,7 +64,7 @@ const FDT_LAST_COMP_VERSION: u32 = 16;
 /// fdt.property_string("bootargs", "panic=-1 console=hvc0 root=/dev/vda")?;
 /// fdt.end_node(chosen_node)?;
 /// fdt.end_node(root_node)?;
-/// let dtb = fdt.finish(0x1000)?;
+/// let dtb = fdt.finish()?;
 /// # Ok(())
 /// # }
 /// # let _ = fdt_example().unwrap();
@@ -296,14 +296,7 @@ impl FdtWriter {
     /// Finish writing the Devicetree Blob (DTB).
     ///
     /// Returns the DTB as a vector of bytes, consuming the `FdtWriter`.
-    /// The DTB is always padded up to `max_size` with zeroes, so the returned
-    /// value will either be exactly `max_size` bytes long, or an error will
-    /// be returned if the DTB does not fit in `max_size` bytes.
-    ///
-    /// # Arguments
-    ///
-    /// `max_size` - Maximum size of the finished DTB in bytes.
-    pub fn finish(mut self, max_size: usize) -> Result<Vec<u8>> {
+    pub fn finish(mut self) -> Result<Vec<u8>> {
         if self.node_depth > 0 {
             return Err(Error::UnclosedNode);
         }
@@ -340,13 +333,7 @@ impl FdtWriter {
         // Add the strings block.
         self.data.append(&mut self.strings);
 
-        if self.data.len() > max_size {
-            Err(Error::TotalSizeTooLarge)
-        } else {
-            // Fill remaining data up to `max_size` with zeroes.
-            self.pad(max_size - self.data.len());
-            Ok(self.data)
-        }
+        Ok(self.data)
     }
 }
 
@@ -377,7 +364,7 @@ mod tests {
         let mut fdt = FdtWriter::new(&[]);
         let root_node = fdt.begin_node("").unwrap();
         fdt.end_node(root_node).unwrap();
-        let actual_fdt = fdt.finish(0x48).unwrap();
+        let actual_fdt = fdt.finish().unwrap();
         let expected_fdt = [
             0xd0, 0x0d, 0xfe, 0xed, // 0000: magic (0xd00dfeed)
             0x00, 0x00, 0x00, 0x48, // 0004: totalsize (0x48)
@@ -415,7 +402,7 @@ mod tests {
         ]);
         let root_node = fdt.begin_node("").unwrap();
         fdt.end_node(root_node).unwrap();
-        let actual_fdt = fdt.finish(0x68).unwrap();
+        let actual_fdt = fdt.finish().unwrap();
         let expected_fdt = [
             0xd0, 0x0d, 0xfe, 0xed, // 0000: magic (0xd00dfeed)
             0x00, 0x00, 0x00, 0x68, // 0004: totalsize (0x68)
@@ -453,7 +440,7 @@ mod tests {
         let root_node = fdt.begin_node("").unwrap();
         fdt.property_null("null").unwrap();
         fdt.end_node(root_node).unwrap();
-        let actual_fdt = fdt.finish(0x59).unwrap();
+        let actual_fdt = fdt.finish().unwrap();
         let expected_fdt = [
             0xd0, 0x0d, 0xfe, 0xed, // 0000: magic (0xd00dfeed)
             0x00, 0x00, 0x00, 0x59, // 0004: totalsize (0x59)
@@ -487,7 +474,7 @@ mod tests {
         let root_node = fdt.begin_node("").unwrap();
         fdt.property_u32("u32", 0x12345678).unwrap();
         fdt.end_node(root_node).unwrap();
-        let actual_fdt = fdt.finish(0x5C).unwrap();
+        let actual_fdt = fdt.finish().unwrap();
         let expected_fdt = [
             0xd0, 0x0d, 0xfe, 0xed, // 0000: magic (0xd00dfeed)
             0x00, 0x00, 0x00, 0x5c, // 0004: totalsize (0x5C)
@@ -531,7 +518,7 @@ mod tests {
         fdt.property_array_u64("arru64", &[0x1234567887654321])
             .unwrap();
         fdt.end_node(root_node).unwrap();
-        let actual_fdt = fdt.finish(0xEE).unwrap();
+        let actual_fdt = fdt.finish().unwrap();
         let expected_fdt = [
             0xd0, 0x0d, 0xfe, 0xed, // 0000: magic (0xd00dfeed)
             0x00, 0x00, 0x00, 0xee, // 0004: totalsize (0xEE)
@@ -603,7 +590,7 @@ mod tests {
         fdt.property_u32("def", 0x12121212).unwrap();
         fdt.end_node(nested_node).unwrap();
         fdt.end_node(root_node).unwrap();
-        let actual_fdt = fdt.finish(0x80).unwrap();
+        let actual_fdt = fdt.finish().unwrap();
         let expected_fdt = [
             0xd0, 0x0d, 0xfe, 0xed, // 0000: magic (0xd00dfeed)
             0x00, 0x00, 0x00, 0x80, // 0004: totalsize (0x80)
@@ -651,7 +638,7 @@ mod tests {
         fdt.property_u32("abc", 0x12121212).unwrap(); // This should reuse the "abc" string.
         fdt.end_node(nested_node).unwrap();
         fdt.end_node(root_node).unwrap();
-        let actual_fdt = fdt.finish(0x90).unwrap();
+        let actual_fdt = fdt.finish().unwrap();
         let expected_fdt = [
             0xd0, 0x0d, 0xfe, 0xed, // 0000: magic (0xd00dfeed)
             0x00, 0x00, 0x00, 0x90, // 0004: totalsize (0x90)
@@ -699,7 +686,7 @@ mod tests {
         fdt.set_boot_cpuid_phys(0x12345678);
         let root_node = fdt.begin_node("").unwrap();
         fdt.end_node(root_node).unwrap();
-        let actual_fdt = fdt.finish(0x48).unwrap();
+        let actual_fdt = fdt.finish().unwrap();
         let expected_fdt = [
             0xd0, 0x0d, 0xfe, 0xed, // 0000: magic (0xd00dfeed)
             0x00, 0x00, 0x00, 0x48, // 0004: totalsize (0x48)
@@ -794,17 +781,6 @@ mod tests {
         fdt.property_u32("ok_prop", 1234).unwrap();
         let _nested_node = fdt.begin_node("mynode").unwrap();
         fdt.property_u32("ok_nested_prop", 5678).unwrap();
-        assert_eq!(fdt.finish(0x100).unwrap_err(), Error::UnclosedNode);
-    }
-
-    #[test]
-    fn string_too_large() {
-        let mut fdt = FdtWriter::new(&[]);
-        let root_node = fdt.begin_node("").unwrap();
-        fdt.property_u32("very_long_string_name_to_exceed_buffer_size", 1)
-            .unwrap();
-        fdt.end_node(root_node).unwrap();
-        // 0x60 is enough to contain the nodes, but not the string table.
-        assert_eq!(fdt.finish(0x60).unwrap_err(), Error::TotalSizeTooLarge);
+        assert_eq!(fdt.finish().unwrap_err(), Error::UnclosedNode);
     }
 }
