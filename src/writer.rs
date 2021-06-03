@@ -4,6 +4,7 @@
 //! This module writes Flattened Devicetree blobs as defined here:
 //! <https://devicetree-specification.readthedocs.io/en/stable/flattened-format.html>
 
+use std::cmp::{Ord, Ordering};
 use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::ffi::CString;
@@ -20,6 +21,8 @@ pub enum Error {
     InvalidString,
     OutOfOrderEndNode,
     UnclosedNode,
+    InvalidMemoryReservation,
+    OverlappingMemoryReservations,
 }
 
 impl fmt::Display for Error {
@@ -35,6 +38,10 @@ impl fmt::Display for Error {
                 write!(f, "Attempted to end a node that was not the most recent")
             }
             Error::UnclosedNode => write!(f, "Attempted to call finish without ending all nodes"),
+            Error::InvalidMemoryReservation => write!(f, "Memory reservation is invalid"),
+            Error::OverlappingMemoryReservations => {
+                write!(f, "Memory reservations are overlapping")
+            }
         }
     }
 }
@@ -69,6 +76,7 @@ const FDT_LAST_COMP_VERSION: u32 = 16;
 /// # }
 /// # let _ = fdt_example().unwrap();
 /// ```
+#[derive(Debug)]
 pub struct FdtWriter {
     data: Vec<u8>,
     off_mem_rsvmap: u32,
@@ -84,11 +92,49 @@ pub struct FdtWriter {
 ///
 /// This represents an area of physical memory reserved by the firmware and unusable by the OS.
 /// For example, this could be used to preserve bootloader code or data used at runtime.
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd)]
 pub struct FdtReserveEntry {
-    /// Physical address of the beginning of the reserved region.
-    pub address: u64,
-    /// Size of the reserved region in bytes.
-    pub size: u64,
+    address: u64,
+    size: u64,
+}
+
+impl FdtReserveEntry {
+    /// Create a memory reservation for the FDT.
+    ///
+    /// # Arguments
+    ///
+    /// * address: Physical address of the beginning of the reserved region.
+    /// * size: Size of the reserved region in bytes.
+    pub fn new(address: u64, size: u64) -> Result<Self> {
+        if address.checked_add(size).is_none() || size == 0 {
+            return Err(Error::InvalidMemoryReservation);
+        }
+
+        Ok(FdtReserveEntry { address, size })
+    }
+}
+
+impl Ord for FdtReserveEntry {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.address.cmp(&other.address)
+    }
+}
+
+// Returns true if there are any overlapping memory reservations.
+fn check_overlapping(mem_reservations: &[FdtReserveEntry]) -> Result<()> {
+    let mut mem_rsvmap_copy = mem_reservations.to_vec();
+    mem_rsvmap_copy.sort();
+    let overlapping = mem_rsvmap_copy.windows(2).any(|w| {
+        // The following add cannot overflow because we can only have
+        // valid FdtReserveEntry (as per the constructor of the type).
+        w[0].address + w[0].size > w[1].address
+    });
+
+    if overlapping {
+        return Err(Error::OverlappingMemoryReservations);
+    }
+
+    Ok(())
 }
 
 /// Handle to an open node created by `FdtWriter::begin_node`.
@@ -125,6 +171,7 @@ impl FdtWriter {
         // This conversion cannot fail since the size of the header is fixed.
         fdt.off_mem_rsvmap = fdt.data.len() as u32;
 
+        check_overlapping(&mem_reservations)?;
         fdt.write_mem_rsvmap(mem_reservations);
 
         fdt.align(4);
@@ -406,14 +453,8 @@ mod tests {
     #[test]
     fn reservemap() {
         let mut fdt = FdtWriter::new(&[
-            FdtReserveEntry {
-                address: 0x12345678AABBCCDD,
-                size: 0x1234,
-            },
-            FdtReserveEntry {
-                address: 0x1020304050607080,
-                size: 0x5678,
-            },
+            FdtReserveEntry::new(0x12345678AABBCCDD, 0x1234).unwrap(),
+            FdtReserveEntry::new(0x1020304050607080, 0x5678).unwrap(),
         ])
         .unwrap();
         let root_node = fdt.begin_node("").unwrap();
@@ -804,14 +845,84 @@ mod tests {
     fn test_overflow_subtract() {
         let overflow_size = std::u32::MAX / size_of::<FdtReserveEntry>() as u32 - 3;
         let too_large_mem_reserve: Vec<FdtReserveEntry> = (0..overflow_size)
-            .map(|i| FdtReserveEntry {
-                address: u64::from(i) * 2,
-                size: 1,
-            })
+            .map(|i| FdtReserveEntry::new(u64::from(i) * 2, 1).unwrap())
             .collect();
         let mut fdt = FdtWriter::new(&too_large_mem_reserve).unwrap();
         let root_node = fdt.begin_node("").unwrap();
         fdt.end_node(root_node).unwrap();
         assert_eq!(fdt.finish().unwrap_err(), Error::TotalSizeTooLarge);
+    }
+
+    #[test]
+    fn test_invalid_mem_reservations() {
+        // Test that we cannot create an invalid FDT reserve entry where the
+        // end address of the region would not fit in an u64.
+        assert_eq!(
+            FdtReserveEntry::new(0x1, u64::MAX).unwrap_err(),
+            Error::InvalidMemoryReservation
+        );
+
+        // Test that we cannot have a memory reservation with size 0.
+        assert_eq!(
+            FdtReserveEntry::new(0x1, 0).unwrap_err(),
+            Error::InvalidMemoryReservation
+        );
+    }
+
+    #[test]
+    fn test_cmp_mem_reservations() {
+        // Test that just the address is taken into consideration when comparing to `FdtReserveEntry`.
+        assert_eq!(
+            FdtReserveEntry::new(0x1, 10)
+                .unwrap()
+                .cmp(&FdtReserveEntry::new(0x1, 11).unwrap()),
+            Ordering::Equal
+        );
+        assert_eq!(
+            FdtReserveEntry::new(0x1, 10)
+                .unwrap()
+                .cmp(&FdtReserveEntry::new(0x2, 10).unwrap()),
+            Ordering::Less
+        );
+        assert_eq!(
+            FdtReserveEntry::new(0x1, 10)
+                .unwrap()
+                .cmp(&FdtReserveEntry::new(0x0, 10).unwrap()),
+            Ordering::Greater
+        );
+    }
+
+    #[test]
+    fn test_overlapping_mem_reservations() {
+        // Check that regions that overlap return an error on new.
+        // Check overlapping by one.
+        let overlapping = [
+            FdtReserveEntry::new(0x3, 1).unwrap(), // this overlaps with
+            FdtReserveEntry::new(0x0, 1).unwrap(),
+            FdtReserveEntry::new(0x2, 2).unwrap(), // this one.
+        ];
+        let fdt = FdtWriter::new(&overlapping);
+        assert_eq!(fdt.unwrap_err(), Error::OverlappingMemoryReservations);
+
+        // Check a larger overlap.
+        let overlapping = [
+            FdtReserveEntry::new(0x100, 100).unwrap(),
+            FdtReserveEntry::new(0x50, 300).unwrap(),
+        ];
+        let fdt = FdtWriter::new(&overlapping);
+        assert_eq!(fdt.unwrap_err(), Error::OverlappingMemoryReservations);
+    }
+
+    #[test]
+    fn test_off_by_one_mem_rsv() {
+        // This test is for making sure we do not introduce off by one errors
+        // in the memory reservations checks.
+        let non_overlapping = [
+            FdtReserveEntry::new(0x0, 1).unwrap(),
+            FdtReserveEntry::new(0x1, 1).unwrap(),
+            FdtReserveEntry::new(0x2, 2).unwrap(),
+        ];
+
+        assert!(FdtWriter::new(&non_overlapping).is_ok());
     }
 }
