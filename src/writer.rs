@@ -375,11 +375,11 @@ impl FdtWriter {
             .len()
             .try_into()
             .map_err(|_| Error::TotalSizeTooLarge)?;
+        // The following operation cannot fail because the total size of data
+        // also includes the offset, and we checked that `size_dt_plus_header`
+        // does not wrap around when converted to an u32.
         let size_dt_struct = size_dt_plus_header - self.off_dt_struct;
 
-        let totalsize = self.data.len() + self.strings.len();
-
-        let totalsize = totalsize.try_into().map_err(|_| Error::TotalSizeTooLarge)?;
         let off_dt_strings = self
             .data
             .len()
@@ -390,6 +390,13 @@ impl FdtWriter {
             .len()
             .try_into()
             .map_err(|_| Error::TotalSizeTooLarge)?;
+
+        let totalsize = self
+            .data
+            .len()
+            .checked_add(self.strings.len())
+            .ok_or(Error::TotalSizeTooLarge)?;
+        let totalsize = totalsize.try_into().map_err(|_| Error::TotalSizeTooLarge)?;
 
         // Finalize the header.
         self.update_u32(0, FDT_MAGIC);
