@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::ffi::CString;
 use std::fmt;
-use std::mem::size_of;
+use std::mem::size_of_val;
 
 use crate::{FDT_BEGIN_NODE, FDT_END, FDT_END_NODE, FDT_MAGIC, FDT_PROP};
 
@@ -345,7 +345,7 @@ impl FdtWriter {
 
     /// Write a property containing an array of 32-bit unsigned integers.
     pub fn property_array_u32(&mut self, name: &str, cells: &[u32]) -> Result<()> {
-        let mut arr = Vec::with_capacity(cells.len() * size_of::<u32>());
+        let mut arr = Vec::with_capacity(size_of_val(cells));
         for &c in cells {
             arr.extend(&c.to_be_bytes());
         }
@@ -354,7 +354,7 @@ impl FdtWriter {
 
     /// Write a property containing an array of 64-bit unsigned integers.
     pub fn property_array_u64(&mut self, name: &str, cells: &[u64]) -> Result<()> {
-        let mut arr = Vec::with_capacity(cells.len() * size_of::<u64>());
+        let mut arr = Vec::with_capacity(size_of_val(cells));
         for &c in cells {
             arr.extend(&c.to_be_bytes());
         }
@@ -844,7 +844,7 @@ mod tests {
     #[test]
     #[cfg(feature = "long_running_test")]
     fn test_overflow_subtract() {
-        let overflow_size = u32::MAX / size_of::<FdtReserveEntry>() as u32 - 3;
+        let overflow_size = u32::MAX / std::mem::size_of::<FdtReserveEntry>() as u32 - 3;
         let too_large_mem_reserve: Vec<FdtReserveEntry> = (0..overflow_size)
             .map(|i| FdtReserveEntry::new(u64::from(i) * 2, 1).unwrap())
             .collect();
