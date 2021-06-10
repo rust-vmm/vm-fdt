@@ -18,6 +18,10 @@ Some questions that might help in writing this section:
   doing?
 - Is this crate used by other rust-vmm components? If yes, how?
 
+This crate defines a development feature: `long_running_test`. This feature
+SHOULD NOT be used in production as it might enable functionality that is safe
+only for development use cases.
+
 ## Examples
 
 The following is a simple example of creating a device tree with various
