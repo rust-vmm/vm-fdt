@@ -225,6 +225,8 @@ impl FdtWriter {
 
     // Rewrite the value of a big-endian u32 within data.
     fn update_u32(&mut self, offset: usize, val: u32) {
+        // Safe to use `+ 4` since we are calling this function with small values, and it's a
+        // private function.
         let data_slice = &mut self.data[offset..offset + 4];
         data_slice.copy_from_slice(&val.to_be_bytes());
     }
@@ -263,6 +265,8 @@ impl FdtWriter {
         }
 
         self.append_u32(FDT_END_NODE);
+        // This can not underflow. The above `if` makes sure there is at least one open node
+        // (node_depth >= 1).
         self.node_depth -= 1;
         self.node_ended = true;
         Ok(())
