@@ -409,31 +409,13 @@ impl FdtWriter {
 mod tests {
     use super::*;
 
-    // Comparing arrays with len > 32 is not possible with rust 1.46.
-    // This is a workaround until we decide to move to a newer Rust version.
-    // This function just compares 2 arrays containing the FDT by splitting the
-    // arrays in groups of max 32 elements.
-    fn fdt_compare(expected_fdt: &[u8], actual_fdt: &[u8]) {
-        assert_eq!(actual_fdt.len(), expected_fdt.len());
-
-        // The following is a dummy `ceil` function for dividing by 32.
-        let group_of_32 = (actual_fdt.len() + 31) / 32;
-        let mut end = 0;
-        for g in 0..group_of_32 {
-            end = usize::min((g + 1) * 32, actual_fdt.len());
-            assert_eq!(actual_fdt[g * 32..end], expected_fdt[g * 32..end]);
-        }
-
-        assert_eq!(end, actual_fdt.len());
-    }
-
     #[test]
     fn minimal() {
         let mut fdt = FdtWriter::new(&[]).unwrap();
         let root_node = fdt.begin_node("").unwrap();
         fdt.end_node(root_node).unwrap();
         let actual_fdt = fdt.finish().unwrap();
-        let expected_fdt = [
+        let expected_fdt = vec![
             0xd0, 0x0d, 0xfe, 0xed, // 0000: magic (0xd00dfeed)
             0x00, 0x00, 0x00, 0x48, // 0004: totalsize (0x48)
             0x00, 0x00, 0x00, 0x38, // 0008: off_dt_struct (0x38)
@@ -453,7 +435,7 @@ mod tests {
             0x00, 0x00, 0x00, 0x02, // 0040: FDT_END_NODE
             0x00, 0x00, 0x00, 0x09, // 0044: FDT_END
         ];
-        fdt_compare(&expected_fdt, actual_fdt.as_slice());
+        assert_eq!(expected_fdt, actual_fdt);
     }
 
     #[test]
@@ -466,7 +448,7 @@ mod tests {
         let root_node = fdt.begin_node("").unwrap();
         fdt.end_node(root_node).unwrap();
         let actual_fdt = fdt.finish().unwrap();
-        let expected_fdt = [
+        let expected_fdt = vec![
             0xd0, 0x0d, 0xfe, 0xed, // 0000: magic (0xd00dfeed)
             0x00, 0x00, 0x00, 0x68, // 0004: totalsize (0x68)
             0x00, 0x00, 0x00, 0x58, // 0008: off_dt_struct (0x58)
@@ -494,7 +476,7 @@ mod tests {
             0x00, 0x00, 0x00, 0x02, // 0060: FDT_END_NODE
             0x00, 0x00, 0x00, 0x09, // 0064: FDT_END
         ];
-        fdt_compare(&expected_fdt, actual_fdt.as_slice());
+        assert_eq!(expected_fdt, actual_fdt);
     }
 
     #[test]
@@ -504,7 +486,7 @@ mod tests {
         fdt.property_null("null").unwrap();
         fdt.end_node(root_node).unwrap();
         let actual_fdt = fdt.finish().unwrap();
-        let expected_fdt = [
+        let expected_fdt = vec![
             0xd0, 0x0d, 0xfe, 0xed, // 0000: magic (0xd00dfeed)
             0x00, 0x00, 0x00, 0x59, // 0004: totalsize (0x59)
             0x00, 0x00, 0x00, 0x38, // 0008: off_dt_struct (0x38)
@@ -528,7 +510,7 @@ mod tests {
             0x00, 0x00, 0x00, 0x09, // 0050: FDT_END
             b'n', b'u', b'l', b'l', 0x00, // 0054: strings block
         ];
-        fdt_compare(&expected_fdt, actual_fdt.as_slice());
+        assert_eq!(expected_fdt, actual_fdt);
     }
 
     #[test]
@@ -538,7 +520,7 @@ mod tests {
         fdt.property_u32("u32", 0x12345678).unwrap();
         fdt.end_node(root_node).unwrap();
         let actual_fdt = fdt.finish().unwrap();
-        let expected_fdt = [
+        let expected_fdt = vec![
             0xd0, 0x0d, 0xfe, 0xed, // 0000: magic (0xd00dfeed)
             0x00, 0x00, 0x00, 0x5c, // 0004: totalsize (0x5C)
             0x00, 0x00, 0x00, 0x38, // 0008: off_dt_struct (0x38)
@@ -563,7 +545,7 @@ mod tests {
             0x00, 0x00, 0x00, 0x09, // 0054: FDT_END
             b'u', b'3', b'2', 0x00, // 0058: strings block
         ];
-        fdt_compare(&expected_fdt, actual_fdt.as_slice());
+        assert_eq!(expected_fdt, actual_fdt);
     }
 
     #[test]
@@ -582,7 +564,7 @@ mod tests {
             .unwrap();
         fdt.end_node(root_node).unwrap();
         let actual_fdt = fdt.finish().unwrap();
-        let expected_fdt = [
+        let expected_fdt = vec![
             0xd0, 0x0d, 0xfe, 0xed, // 0000: magic (0xd00dfeed)
             0x00, 0x00, 0x00, 0xee, // 0004: totalsize (0xEE)
             0x00, 0x00, 0x00, 0x38, // 0008: off_dt_struct (0x38)
@@ -641,7 +623,7 @@ mod tests {
             b'a', b'r', b'r', b'u', b'3', b'2', 0x00, // 00E0: strings + 0x18: "arru32"
             b'a', b'r', b'r', b'u', b'6', b'4', 0x00, // 00E7: strings + 0x1F: "arru64"
         ];
-        fdt_compare(&expected_fdt, actual_fdt.as_slice());
+        assert_eq!(expected_fdt, actual_fdt);
     }
 
     #[test]
@@ -654,7 +636,7 @@ mod tests {
         fdt.end_node(nested_node).unwrap();
         fdt.end_node(root_node).unwrap();
         let actual_fdt = fdt.finish().unwrap();
-        let expected_fdt = [
+        let expected_fdt = vec![
             0xd0, 0x0d, 0xfe, 0xed, // 0000: magic (0xd00dfeed)
             0x00, 0x00, 0x00, 0x80, // 0004: totalsize (0x80)
             0x00, 0x00, 0x00, 0x38, // 0008: off_dt_struct (0x38)
@@ -688,7 +670,7 @@ mod tests {
             b'a', b'b', b'c', 0x00, // 0078: strings + 0x00: "abc"
             b'd', b'e', b'f', 0x00, // 007C: strings + 0x04: "def"
         ];
-        fdt_compare(&expected_fdt, actual_fdt.as_slice());
+        assert_eq!(expected_fdt, actual_fdt);
     }
 
     #[test]
@@ -702,7 +684,7 @@ mod tests {
         fdt.end_node(nested_node).unwrap();
         fdt.end_node(root_node).unwrap();
         let actual_fdt = fdt.finish().unwrap();
-        let expected_fdt = [
+        let expected_fdt = vec![
             0xd0, 0x0d, 0xfe, 0xed, // 0000: magic (0xd00dfeed)
             0x00, 0x00, 0x00, 0x90, // 0004: totalsize (0x90)
             0x00, 0x00, 0x00, 0x38, // 0008: off_dt_struct (0x38)
@@ -740,7 +722,7 @@ mod tests {
             b'a', b'b', b'c', 0x00, // 0088: strings + 0x00: "abc"
             b'd', b'e', b'f', 0x00, // 008C: strings + 0x04: "def"
         ];
-        fdt_compare(&expected_fdt, actual_fdt.as_slice());
+        assert_eq!(expected_fdt, actual_fdt);
     }
 
     #[test]
@@ -750,7 +732,7 @@ mod tests {
         let root_node = fdt.begin_node("").unwrap();
         fdt.end_node(root_node).unwrap();
         let actual_fdt = fdt.finish().unwrap();
-        let expected_fdt = [
+        let expected_fdt = vec![
             0xd0, 0x0d, 0xfe, 0xed, // 0000: magic (0xd00dfeed)
             0x00, 0x00, 0x00, 0x48, // 0004: totalsize (0x48)
             0x00, 0x00, 0x00, 0x38, // 0008: off_dt_struct (0x38)
@@ -770,7 +752,7 @@ mod tests {
             0x00, 0x00, 0x00, 0x02, // 0040: FDT_END_NODE
             0x00, 0x00, 0x00, 0x09, // 0044: FDT_END
         ];
-        fdt_compare(&expected_fdt, actual_fdt.as_slice());
+        assert_eq!(expected_fdt, actual_fdt);
     }
 
     #[test]
