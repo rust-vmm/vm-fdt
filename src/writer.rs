@@ -92,7 +92,7 @@ pub struct FdtWriter {
 ///
 /// This represents an area of physical memory reserved by the firmware and unusable by the OS.
 /// For example, this could be used to preserve bootloader code or data used at runtime.
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FdtReserveEntry {
     address: u64,
     size: u64,
@@ -117,6 +117,12 @@ impl FdtReserveEntry {
 impl Ord for FdtReserveEntry {
     fn cmp(&self, other: &Self) -> Ordering {
         self.address.cmp(&other.address)
+    }
+}
+
+impl PartialOrd for FdtReserveEntry {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.address.partial_cmp(&other.address)
     }
 }
 
