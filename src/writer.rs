@@ -61,7 +61,7 @@ const FDT_LAST_COMP_VERSION: u32 = 16;
 /// use vm_fdt::FdtWriter;
 ///
 /// # fn fdt_example() -> vm_fdt::FdtWriterResult<()> {
-/// let mut fdt = FdtWriter::new(&[])?;
+/// let mut fdt = FdtWriter::new()?;
 /// let root_node = fdt.begin_node("")?;
 /// fdt.property_string("compatible", "linux,dummy-virt")?;
 /// fdt.property_u32("#address-cells", 0x2)?;
@@ -155,11 +155,16 @@ pub struct FdtWriterNode {
 
 impl FdtWriter {
     /// Create a new Flattened Devicetree writer instance.
+    pub fn new() -> Result<Self> {
+        FdtWriter::new_with_mem_reserv(&[])
+    }
+
+    /// Create a new Flattened Devicetree writer instance.
     ///
     /// # Arguments
     ///
     /// `mem_reservations` - reserved physical memory regions to list in the FDT header.
-    pub fn new(mem_reservations: &[FdtReserveEntry]) -> Result<Self> {
+    pub fn new_with_mem_reserv(mem_reservations: &[FdtReserveEntry]) -> Result<Self> {
         let data = vec![0u8; FDT_HEADER_SIZE]; // Reserve space for header.
 
         let mut fdt = FdtWriter {
@@ -411,7 +416,7 @@ mod tests {
 
     #[test]
     fn minimal() {
-        let mut fdt = FdtWriter::new(&[]).unwrap();
+        let mut fdt = FdtWriter::new().unwrap();
         let root_node = fdt.begin_node("").unwrap();
         fdt.end_node(root_node).unwrap();
         let actual_fdt = fdt.finish().unwrap();
@@ -440,7 +445,7 @@ mod tests {
 
     #[test]
     fn reservemap() {
-        let mut fdt = FdtWriter::new(&[
+        let mut fdt = FdtWriter::new_with_mem_reserv(&[
             FdtReserveEntry::new(0x12345678AABBCCDD, 0x1234).unwrap(),
             FdtReserveEntry::new(0x1020304050607080, 0x5678).unwrap(),
         ])
@@ -481,7 +486,7 @@ mod tests {
 
     #[test]
     fn prop_null() {
-        let mut fdt = FdtWriter::new(&[]).unwrap();
+        let mut fdt = FdtWriter::new().unwrap();
         let root_node = fdt.begin_node("").unwrap();
         fdt.property_null("null").unwrap();
         fdt.end_node(root_node).unwrap();
@@ -515,7 +520,7 @@ mod tests {
 
     #[test]
     fn prop_u32() {
-        let mut fdt = FdtWriter::new(&[]).unwrap();
+        let mut fdt = FdtWriter::new().unwrap();
         let root_node = fdt.begin_node("").unwrap();
         fdt.property_u32("u32", 0x12345678).unwrap();
         fdt.end_node(root_node).unwrap();
@@ -550,7 +555,7 @@ mod tests {
 
     #[test]
     fn all_props() {
-        let mut fdt = FdtWriter::new(&[]).unwrap();
+        let mut fdt = FdtWriter::new().unwrap();
         let root_node = fdt.begin_node("").unwrap();
         fdt.property_null("null").unwrap();
         fdt.property_u32("u32", 0x12345678).unwrap();
@@ -628,7 +633,7 @@ mod tests {
 
     #[test]
     fn nested_nodes() {
-        let mut fdt = FdtWriter::new(&[]).unwrap();
+        let mut fdt = FdtWriter::new().unwrap();
         let root_node = fdt.begin_node("").unwrap();
         fdt.property_u32("abc", 0x13579024).unwrap();
         let nested_node = fdt.begin_node("nested").unwrap();
@@ -675,7 +680,7 @@ mod tests {
 
     #[test]
     fn prop_name_string_reuse() {
-        let mut fdt = FdtWriter::new(&[]).unwrap();
+        let mut fdt = FdtWriter::new().unwrap();
         let root_node = fdt.begin_node("").unwrap();
         fdt.property_u32("abc", 0x13579024).unwrap();
         let nested_node = fdt.begin_node("nested").unwrap();
@@ -727,7 +732,7 @@ mod tests {
 
     #[test]
     fn boot_cpuid() {
-        let mut fdt = FdtWriter::new(&[]).unwrap();
+        let mut fdt = FdtWriter::new().unwrap();
         fdt.set_boot_cpuid_phys(0x12345678);
         let root_node = fdt.begin_node("").unwrap();
         fdt.end_node(root_node).unwrap();
@@ -757,7 +762,7 @@ mod tests {
 
     #[test]
     fn invalid_node_name_nul() {
-        let mut fdt = FdtWriter::new(&[]).unwrap();
+        let mut fdt = FdtWriter::new().unwrap();
         assert_eq!(
             fdt.begin_node("abc\0def").unwrap_err(),
             Error::InvalidString
@@ -766,7 +771,7 @@ mod tests {
 
     #[test]
     fn invalid_prop_name_nul() {
-        let mut fdt = FdtWriter::new(&[]).unwrap();
+        let mut fdt = FdtWriter::new().unwrap();
         assert_eq!(
             fdt.property_u32("abc\0def", 0).unwrap_err(),
             Error::InvalidString
@@ -775,7 +780,7 @@ mod tests {
 
     #[test]
     fn invalid_prop_string_value_nul() {
-        let mut fdt = FdtWriter::new(&[]).unwrap();
+        let mut fdt = FdtWriter::new().unwrap();
         assert_eq!(
             fdt.property_string("mystr", "abc\0def").unwrap_err(),
             Error::InvalidString
@@ -784,7 +789,7 @@ mod tests {
 
     #[test]
     fn invalid_prop_string_list_value_nul() {
-        let mut fdt = FdtWriter::new(&[]).unwrap();
+        let mut fdt = FdtWriter::new().unwrap();
         let strs = vec!["test".into(), "abc\0def".into()];
         assert_eq!(
             fdt.property_string_list("mystr", strs).unwrap_err(),
@@ -794,7 +799,7 @@ mod tests {
 
     #[test]
     fn invalid_prop_after_end_node() {
-        let mut fdt = FdtWriter::new(&[]).unwrap();
+        let mut fdt = FdtWriter::new().unwrap();
         let _root_node = fdt.begin_node("").unwrap();
         fdt.property_u32("ok_prop", 1234).unwrap();
         let nested_node = fdt.begin_node("mynode").unwrap();
@@ -809,7 +814,7 @@ mod tests {
 
     #[test]
     fn invalid_end_node_out_of_order() {
-        let mut fdt = FdtWriter::new(&[]).unwrap();
+        let mut fdt = FdtWriter::new().unwrap();
         let root_node = fdt.begin_node("").unwrap();
         fdt.property_u32("ok_prop", 1234).unwrap();
         let _nested_node = fdt.begin_node("mynode").unwrap();
@@ -821,7 +826,7 @@ mod tests {
 
     #[test]
     fn invalid_finish_while_node_open() {
-        let mut fdt = FdtWriter::new(&[]).unwrap();
+        let mut fdt = FdtWriter::new().unwrap();
         let _root_node = fdt.begin_node("").unwrap();
         fdt.property_u32("ok_prop", 1234).unwrap();
         let _nested_node = fdt.begin_node("mynode").unwrap();
@@ -836,7 +841,7 @@ mod tests {
         let too_large_mem_reserve: Vec<FdtReserveEntry> = (0..overflow_size)
             .map(|i| FdtReserveEntry::new(u64::from(i) * 2, 1).unwrap())
             .collect();
-        let mut fdt = FdtWriter::new(&too_large_mem_reserve).unwrap();
+        let mut fdt = FdtWriter::new_with_mem_reserv(&too_large_mem_reserve).unwrap();
         let root_node = fdt.begin_node("").unwrap();
         fdt.end_node(root_node).unwrap();
         assert_eq!(fdt.finish().unwrap_err(), Error::TotalSizeTooLarge);
@@ -890,7 +895,7 @@ mod tests {
             FdtReserveEntry::new(0x0, 1).unwrap(),
             FdtReserveEntry::new(0x2, 2).unwrap(), // this one.
         ];
-        let fdt = FdtWriter::new(&overlapping);
+        let fdt = FdtWriter::new_with_mem_reserv(&overlapping);
         assert_eq!(fdt.unwrap_err(), Error::OverlappingMemoryReservations);
 
         // Check a larger overlap.
@@ -898,7 +903,7 @@ mod tests {
             FdtReserveEntry::new(0x100, 100).unwrap(),
             FdtReserveEntry::new(0x50, 300).unwrap(),
         ];
-        let fdt = FdtWriter::new(&overlapping);
+        let fdt = FdtWriter::new_with_mem_reserv(&overlapping);
         assert_eq!(fdt.unwrap_err(), Error::OverlappingMemoryReservations);
     }
 
@@ -912,6 +917,6 @@ mod tests {
             FdtReserveEntry::new(0x2, 2).unwrap(),
         ];
 
-        assert!(FdtWriter::new(&non_overlapping).is_ok());
+        assert!(FdtWriter::new_with_mem_reserv(&non_overlapping).is_ok());
     }
 }
