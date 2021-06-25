@@ -16,6 +16,8 @@ use crate::{FDT_BEGIN_NODE, FDT_END, FDT_END_NODE, FDT_MAGIC, FDT_PROP};
 #[derive(Debug, PartialEq)]
 /// Errors associated with creating the Flattened Device Tree.
 pub enum Error {
+    /// Properties may not be added before beginning a node.
+    PropertyBeforeBeginNode,
     /// Properties may not be added after a node has been ended.
     PropertyAfterEndNode,
     /// Property value size must fit in 32 bits.
@@ -37,6 +39,9 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Error::PropertyBeforeBeginNode => {
+                write!(f, "Properties may not be added before beginning a node")
+            }
             Error::PropertyAfterEndNode => {
                 write!(f, "Properties may not be added after a node has been ended")
             }
@@ -307,6 +312,10 @@ impl FdtWriter {
     pub fn property(&mut self, name: &str, val: &[u8]) -> Result<()> {
         if self.node_ended {
             return Err(Error::PropertyAfterEndNode);
+        }
+
+        if self.node_depth == 0 {
+            return Err(Error::PropertyBeforeBeginNode);
         }
 
         let name_cstr = CString::new(name).map_err(|_| Error::InvalidString)?;
@@ -652,6 +661,24 @@ mod tests {
     }
 
     #[test]
+    fn property_before_begin_node() {
+        let mut fdt = FdtWriter::new().unwrap();
+        // Test that adding a property at the beginning of the FDT blob does not work.
+        assert_eq!(
+            fdt.property_string("invalid", "property").unwrap_err(),
+            Error::PropertyBeforeBeginNode
+        );
+
+        // Test that adding a property after the end node does not work.
+        let node = fdt.begin_node("root").unwrap();
+        fdt.end_node(node).unwrap();
+        assert_eq!(
+            fdt.property_string("invalid", "property").unwrap_err(),
+            Error::PropertyAfterEndNode
+        );
+    }
+
+    #[test]
     fn nested_nodes() {
         let mut fdt = FdtWriter::new().unwrap();
         let root_node = fdt.begin_node("").unwrap();
@@ -783,6 +810,7 @@ mod tests {
     #[test]
     fn invalid_node_name_nul() {
         let mut fdt = FdtWriter::new().unwrap();
+        fdt.begin_node("root").unwrap();
         assert_eq!(
             fdt.begin_node("abc\0def").unwrap_err(),
             Error::InvalidString
@@ -792,6 +820,7 @@ mod tests {
     #[test]
     fn invalid_prop_name_nul() {
         let mut fdt = FdtWriter::new().unwrap();
+        fdt.begin_node("root").unwrap();
         assert_eq!(
             fdt.property_u32("abc\0def", 0).unwrap_err(),
             Error::InvalidString
@@ -801,6 +830,7 @@ mod tests {
     #[test]
     fn invalid_prop_string_value_nul() {
         let mut fdt = FdtWriter::new().unwrap();
+        fdt.begin_node("root").unwrap();
         assert_eq!(
             fdt.property_string("mystr", "abc\0def").unwrap_err(),
             Error::InvalidString
