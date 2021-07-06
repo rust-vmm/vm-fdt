@@ -14,14 +14,23 @@ use std::mem::size_of;
 use crate::{FDT_BEGIN_NODE, FDT_END, FDT_END_NODE, FDT_MAGIC, FDT_PROP};
 
 #[derive(Debug, PartialEq)]
+/// Errors associated with creating the Flattened Device Tree.
 pub enum Error {
+    /// Properties may not be added after a node has been ended.
     PropertyAfterEndNode,
+    /// Property value size must fit in 32 bits.
     PropertyValueTooLarge,
+    /// Total size must fit in 32 bits.
     TotalSizeTooLarge,
+    /// Strings cannot contain NUL.
     InvalidString,
+    /// Attempted to end a node that was not the most recent.
     OutOfOrderEndNode,
+    /// Attempted to call finish without ending all nodes.
     UnclosedNode,
+    /// Memory reservation is invalid.
     InvalidMemoryReservation,
+    /// Memory reservations are overlapping.
     OverlappingMemoryReservations,
 }
 
