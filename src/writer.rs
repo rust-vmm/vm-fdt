@@ -62,29 +62,7 @@ const FDT_HEADER_SIZE: usize = 40;
 const FDT_VERSION: u32 = 17;
 const FDT_LAST_COMP_VERSION: u32 = 16;
 
-/// Interface for writing a Flattened Devicetree (FDT) and emitting a Devicetree Blob (DTB).
-///
-/// # Example
-///
-/// ```rust
-/// use vm_fdt::FdtWriter;
-///
-/// # fn fdt_example() -> vm_fdt::FdtWriterResult<()> {
-/// let mut fdt = FdtWriter::new()?;
-/// let root_node = fdt.begin_node("")?;
-/// fdt.property_string("compatible", "linux,dummy-virt")?;
-/// fdt.property_u32("#address-cells", 0x2)?;
-/// fdt.property_u32("#size-cells", 0x2)?;
-/// let chosen_node = fdt.begin_node("chosen")?;
-/// fdt.property_u32("linux,pci-probe-only", 1)?;
-/// fdt.property_string("bootargs", "panic=-1 console=hvc0 root=/dev/vda")?;
-/// fdt.end_node(chosen_node)?;
-/// fdt.end_node(root_node)?;
-/// let dtb = fdt.finish()?;
-/// # Ok(())
-/// # }
-/// # let _ = fdt_example().unwrap();
-/// ```
+/// Interface for writing a Flattened Devicetree (FDT) and emitting a Devicetree Blob (DTB).    
 #[derive(Debug)]
 pub struct FdtWriter {
     data: Vec<u8>,
