@@ -67,7 +67,7 @@ const FDT_HEADER_SIZE: usize = 40;
 const FDT_VERSION: u32 = 17;
 const FDT_LAST_COMP_VERSION: u32 = 16;
 
-/// Interface for writing a Flattened Devicetree (FDT) and emitting a Devicetree Blob (DTB).    
+/// Interface for writing a Flattened Devicetree (FDT) and emitting a Devicetree Blob (DTB).
 #[derive(Debug)]
 pub struct FdtWriter {
     data: Vec<u8>,
@@ -198,6 +198,21 @@ impl FdtWriter {
     }
 
     /// Set the `boot_cpuid_phys` field of the devicetree header.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use vm_fdt::{Error, FdtWriter};
+    ///
+    /// fn create_fdt() -> Result<Vec<u8>, Error> {
+    ///     let mut fdt = FdtWriter::new()?;
+    ///     fdt.set_boot_cpuid_phys(0x12345678);
+    ///     // ... add other nodes & properties
+    ///     fdt.finish()
+    /// }
+    ///
+    /// # let dtb = create_fdt().unwrap();
+    /// ```
     pub fn set_boot_cpuid_phys(&mut self, boot_cpuid_phys: u32) {
         self.boot_cpuid_phys = boot_cpuid_phys;
     }
