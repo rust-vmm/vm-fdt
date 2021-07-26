@@ -19,7 +19,7 @@ In vm-fdt we define and work with the following primitives:
 - properties (defined as key-value pairs).
 
 An FDT has one or multiple nodes, and each node can optionally have
-properties.
+properties and child nodes, creating a tree structure.
 
 The [`FdtWriter` structure](src/writer.rs) provides an interface suitable
 for dynamically generating a Devicetree blob at runtime. The supported
@@ -29,8 +29,8 @@ operations are:
    The call returns an object of type `FdtWriterNode` on which we can set
    properties (using the `property_*` functions as defined below), or add
    child nodes (via nested calls to `begin_node`). Properties for the node
-   can only be added *before* creating children nodes (as defined in the
-   specification). Each node must end with a call to the end_node function.
+   can only be added *before* creating child nodes (as defined in the
+   specification). Each node must end with a call to the `end_node` function.
 1. **Create properties**. Properties are key-value pairs, where the key is a
    string, and the value is a raw bytes array. To make it easier to use, such
    that the caller of the FDT interface does not need to create a raw byte
@@ -39,7 +39,7 @@ operations are:
   * `property_string`
   * `property_string_list`
   * `property_u32`
-  * `property_64`
+  * `property_u64`
   * `property_array_u32`
   * `property_array_u64`
   * `property` (raw byte array)
