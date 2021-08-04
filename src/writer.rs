@@ -174,7 +174,7 @@ impl FdtWriter {
         // This conversion cannot fail since the size of the header is fixed.
         fdt.off_mem_rsvmap = fdt.data.len() as u32;
 
-        check_overlapping(&mem_reservations)?;
+        check_overlapping(mem_reservations)?;
         fdt.write_mem_rsvmap(mem_reservations);
 
         fdt.align(4);
@@ -343,7 +343,7 @@ impl FdtWriter {
         let mut bytes = Vec::new();
         for s in values {
             let cstr = CString::new(s).map_err(|_| Error::InvalidString)?;
-            bytes.extend_from_slice(&cstr.to_bytes_with_nul());
+            bytes.extend_from_slice(cstr.to_bytes_with_nul());
         }
         self.property(name, &bytes)
     }
