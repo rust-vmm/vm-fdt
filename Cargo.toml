@@ -6,6 +6,7 @@ authors = ["The Chromium OS Authors"]
 license = "Apache-2.0 OR BSD-3-Clause"
 edition = "2018"
 repository = "https://github.com/rust-vmm/vm-fdt"
+keywords = ["fdt"]
 
 [features]
 # This feature was added as a way to exclude long running tests in development.
