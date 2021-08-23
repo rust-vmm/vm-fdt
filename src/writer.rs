@@ -60,6 +60,8 @@ impl fmt::Display for Error {
     }
 }
 
+impl std::error::Error for Error {}
+
 /// Result of a FDT writer operation.
 pub type Result<T> = std::result::Result<T, Error>;
 
