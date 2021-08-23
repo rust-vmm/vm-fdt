@@ -11,7 +11,10 @@ use std::ffi::CString;
 use std::fmt;
 use std::mem::size_of_val;
 
-use crate::{FDT_BEGIN_NODE, FDT_END, FDT_END_NODE, FDT_MAGIC, FDT_PROP};
+use crate::{
+    FDT_BEGIN_NODE, FDT_END, FDT_END_NODE, FDT_MAGIC, FDT_PROP, NODE_NAME_MAX_LEN,
+    PROPERTY_NAME_MAX_LEN,
+};
 
 #[derive(Debug, PartialEq)]
 /// Errors associated with creating the Flattened Device Tree.
@@ -34,6 +37,10 @@ pub enum Error {
     InvalidMemoryReservation,
     /// Memory reservations are overlapping.
     OverlappingMemoryReservations,
+    /// Invalid node name.
+    InvalidNodeName,
+    /// Invalid property name.
+    InvalidPropertyName,
 }
 
 impl fmt::Display for Error {
@@ -56,6 +63,8 @@ impl fmt::Display for Error {
             Error::OverlappingMemoryReservations => {
                 write!(f, "Memory reservations are overlapping")
             }
+            Error::InvalidNodeName => write!(f, "Invalid node name"),
+            Error::InvalidPropertyName => write!(f, "Invalid property name"),
         }
     }
 }
@@ -135,6 +144,72 @@ fn check_overlapping(mem_reservations: &[FdtReserveEntry]) -> Result<()> {
     }
 
     Ok(())
+}
+
+// Check if `name` is a valid node name in the form "node-name@unit-address".
+// https://devicetree-specification.readthedocs.io/en/stable/devicetree-basics.html#node-name-requirements
+fn node_name_valid(name: &str) -> bool {
+    // Special case: allow empty node names.
+    // This is technically not allowed by the spec, but it seems to be accepted in practice.
+    if name.is_empty() {
+        return true;
+    }
+
+    let mut parts = name.split('@');
+
+    let node_name = parts.next().unwrap(); // split() always returns at least one part
+    let unit_address = parts.next();
+
+    if unit_address.is_some() && parts.next().is_some() {
+        // Node names should only contain one '@'.
+        return false;
+    }
+
+    if node_name.is_empty() || node_name.len() > NODE_NAME_MAX_LEN {
+        return false;
+    }
+
+    if !node_name.starts_with(node_name_valid_first_char) {
+        return false;
+    }
+
+    if node_name.contains(|c: char| !node_name_valid_char(c)) {
+        return false;
+    }
+
+    if let Some(unit_address) = unit_address {
+        if unit_address.contains(|c: char| !node_name_valid_char(c)) {
+            return false;
+        }
+    }
+
+    true
+}
+
+fn node_name_valid_char(c: char) -> bool {
+    matches!(c, '0'..='9' | 'a'..='z' | 'A'..='Z' | ',' | '.' | '_' | '+' | '-')
+}
+
+fn node_name_valid_first_char(c: char) -> bool {
+    matches!(c, 'a'..='z' | 'A'..='Z')
+}
+
+// Check if `name` is a valid property name.
+// https://devicetree-specification.readthedocs.io/en/stable/devicetree-basics.html#property-names
+fn property_name_valid(name: &str) -> bool {
+    if name.is_empty() || name.len() > PROPERTY_NAME_MAX_LEN {
+        return false;
+    }
+
+    if name.contains(|c: char| !property_name_valid_char(c)) {
+        return false;
+    }
+
+    true
+}
+
+fn property_name_valid_char(c: char) -> bool {
+    matches!(c, '0'..='9' | 'a'..='z' | 'A'..='Z' | ',' | '.' | '_' | '+' | '?' | '#' | '-')
 }
 
 /// Handle to an open node created by `FdtWriter::begin_node`.
@@ -257,6 +332,12 @@ impl FdtWriter {
     /// `name` - name of the node; must not contain any NUL bytes.
     pub fn begin_node(&mut self, name: &str) -> Result<FdtWriterNode> {
         let name_cstr = CString::new(name).map_err(|_| Error::InvalidString)?;
+        // The unit adddress part of the node name, if present, is not fully validated
+        // since the exact requirements depend on the bus mapping.
+        // https://devicetree-specification.readthedocs.io/en/stable/devicetree-basics.html#node-name-requirements
+        if !node_name_valid(name) {
+            return Err(Error::InvalidNodeName);
+        }
         self.append_u32(FDT_BEGIN_NODE);
         self.data.extend(name_cstr.to_bytes_with_nul());
         self.align(4);
@@ -314,6 +395,10 @@ impl FdtWriter {
         }
 
         let name_cstr = CString::new(name).map_err(|_| Error::InvalidString)?;
+
+        if !property_name_valid(name) {
+            return Err(Error::InvalidPropertyName);
+        }
 
         let len = val
             .len()
@@ -963,5 +1048,51 @@ mod tests {
         ];
 
         assert!(FdtWriter::new_with_mem_reserv(&non_overlapping).is_ok());
+    }
+
+    #[test]
+    fn test_node_name_valid() {
+        assert!(node_name_valid("abcdef"));
+        assert!(node_name_valid("abcdef@1000"));
+        assert!(node_name_valid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+        assert!(node_name_valid("azAZ09,._+-"));
+        assert!(node_name_valid("Abcd"));
+
+        assert!(node_name_valid(""));
+
+        // Name missing.
+        assert!(!node_name_valid("@1000"));
+
+        // Name too long.
+        assert!(!node_name_valid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+        assert!(!node_name_valid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@1234"));
+
+        // Name contains invalid characters.
+        assert!(!node_name_valid("abc#def"));
+        assert!(!node_name_valid("abc/def"));
+
+        // Name begins with non-alphabetic character.
+        assert!(!node_name_valid("1abc"));
+
+        // Unit address contains invalid characters.
+        assert!(!node_name_valid("abcdef@1000#"));
+
+        // More than one '@'.
+        assert!(!node_name_valid("abc@1000@def"));
+    }
+
+    #[test]
+    fn test_property_name_valid() {
+        assert!(property_name_valid("abcdef"));
+        assert!(property_name_valid("01234"));
+        assert!(property_name_valid("azAZ09,._+?#-"));
+        assert!(property_name_valid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+
+        // Name contains invalid characters.
+        assert!(!property_name_valid("abc!def"));
+        assert!(!property_name_valid("abc@1234"));
+
+        // Name too long.
+        assert!(!property_name_valid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
     }
 }
