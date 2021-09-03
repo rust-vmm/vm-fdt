@@ -44,6 +44,21 @@ operations are:
   * `property_array_u64`
   * `property` (raw byte array)
 
+## Threat Model
+
+*Input*: The caller of the vm-fdt public interface is trusted.
+
+*Output*: The content of the FDT blob resides in memory, and it’s trusted. The
+memory allocated by this crate is directly proportional with the number of
+nodes and properties defined by the user (through the `property*` and
+`begin_node` functions).
+
+|#NR	|Threat	|Mitigation	|
+|---	|---	|---	|
+|1	|Due to a programming error the FDT code causes large memory allocations.|The operator of the vm-fdt interface is trusted, and the memory allocations are directly proportional to the number of calls to the public FDT interface. At the vm-fdt level, the maximum size allowed for the blob is 4.3 GB. This is enforced by checking that the length of the data blob fits in an u32, and the maximum value of an u32 is 4294967295 (~4.3 GB). The caller of the vm-fdt interface can check the size of the FDT blob upon calling the finish function.	|
+|2	|Passing large arrays of memory reservations when initializing the FdtWriter leads to undefined behavior.	|The length of the memory reservations is checked. All subsequent operations based on input are checked for overflows.	|
+|3	|Passing overlapping memory reservations when initializing the FdtWriter leads to undefined behavior when loading the blob in guest memory	|The FDT specification explicitly defines that the memory reservation entries MUST not overlap. This is enforced by the FdtWriter, and checked in the [unit tests.](https://github.com/rust-vmm/vm-fdt/blob/c89583fa4975cd80a232bd4cdd0efd74c2ca219d/src/writer.rs#L897)	|
+
 ## Usage
 
 The following code is creating an FDT blob with a root node that has 3
