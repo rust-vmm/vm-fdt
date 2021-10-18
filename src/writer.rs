@@ -41,6 +41,8 @@ pub enum Error {
     InvalidNodeName,
     /// Invalid property name.
     InvalidPropertyName,
+    /// Node depth exceeds usize::MAX
+    NodeDepthTooLarge,
 }
 
 impl fmt::Display for Error {
@@ -65,6 +67,7 @@ impl fmt::Display for Error {
             }
             Error::InvalidNodeName => write!(f, "Invalid node name"),
             Error::InvalidPropertyName => write!(f, "Invalid property name"),
+            Error::NodeDepthTooLarge => write!(f, "Node depth exceeds usize::MAX"),
         }
     }
 }
@@ -331,6 +334,10 @@ impl FdtWriter {
     ///
     /// `name` - name of the node; must not contain any NUL bytes.
     pub fn begin_node(&mut self, name: &str) -> Result<FdtWriterNode> {
+        if self.node_depth == usize::MAX {
+            return Err(Error::NodeDepthTooLarge);
+        }
+
         let name_cstr = CString::new(name).map_err(|_| Error::InvalidString)?;
         // The unit adddress part of the node name, if present, is not fully validated
         // since the exact requirements depend on the bus mapping.
@@ -341,6 +348,8 @@ impl FdtWriter {
         self.append_u32(FDT_BEGIN_NODE);
         self.data.extend(name_cstr.to_bytes_with_nul());
         self.align(4);
+        // This can not overflow due to the `if` at the beginning of the function
+        // where the current depth is checked against usize::MAX.
         self.node_depth += 1;
         self.node_ended = false;
         Ok(FdtWriterNode {
@@ -1094,5 +1103,12 @@ mod tests {
 
         // Name too long.
         assert!(!property_name_valid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+    }
+
+    #[test]
+    fn depth_overflow() {
+        let mut fdt = FdtWriter::new().unwrap();
+        fdt.node_depth = usize::MAX;
+        assert_eq!(fdt.begin_node("").unwrap_err(), Error::NodeDepthTooLarge);
     }
 }
