@@ -41,7 +41,7 @@ pub enum Error {
     InvalidNodeName,
     /// Invalid property name.
     InvalidPropertyName,
-    /// Node depth exceeds usize::MAX
+    /// Node depth exceeds FDT_MAX_NODE_DEPTH
     NodeDepthTooLarge,
 }
 
@@ -67,7 +67,7 @@ impl fmt::Display for Error {
             }
             Error::InvalidNodeName => write!(f, "Invalid node name"),
             Error::InvalidPropertyName => write!(f, "Invalid property name"),
-            Error::NodeDepthTooLarge => write!(f, "Node depth exceeds usize::MAX"),
+            Error::NodeDepthTooLarge => write!(f, "Node depth exceeds FDT_MAX_NODE_DEPTH"),
         }
     }
 }
@@ -80,6 +80,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 const FDT_HEADER_SIZE: usize = 40;
 const FDT_VERSION: u32 = 17;
 const FDT_LAST_COMP_VERSION: u32 = 16;
+const FDT_MAX_NODE_DEPTH: usize = 64;
 
 /// Interface for writing a Flattened Devicetree (FDT) and emitting a Devicetree Blob (DTB).
 #[derive(Debug)]
@@ -334,7 +335,7 @@ impl FdtWriter {
     ///
     /// `name` - name of the node; must not contain any NUL bytes.
     pub fn begin_node(&mut self, name: &str) -> Result<FdtWriterNode> {
-        if self.node_depth == usize::MAX {
+        if self.node_depth >= FDT_MAX_NODE_DEPTH {
             return Err(Error::NodeDepthTooLarge);
         }
 
@@ -349,7 +350,7 @@ impl FdtWriter {
         self.data.extend(name_cstr.to_bytes_with_nul());
         self.align(4);
         // This can not overflow due to the `if` at the beginning of the function
-        // where the current depth is checked against usize::MAX.
+        // where the current depth is checked against FDT_MAX_NODE_DEPTH.
         self.node_depth += 1;
         self.node_ended = false;
         Ok(FdtWriterNode {
@@ -1108,7 +1109,12 @@ mod tests {
     #[test]
     fn depth_overflow() {
         let mut fdt = FdtWriter::new().unwrap();
-        fdt.node_depth = usize::MAX;
-        assert_eq!(fdt.begin_node("").unwrap_err(), Error::NodeDepthTooLarge);
+        for _ in 1..=FDT_MAX_NODE_DEPTH {
+            fdt.begin_node("test").unwrap();
+        }
+        assert_eq!(
+            fdt.begin_node("test").unwrap_err(),
+            Error::NodeDepthTooLarge
+        );
     }
 }
