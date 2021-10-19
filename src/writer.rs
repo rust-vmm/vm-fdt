@@ -80,6 +80,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 const FDT_HEADER_SIZE: usize = 40;
 const FDT_VERSION: u32 = 17;
 const FDT_LAST_COMP_VERSION: u32 = 16;
+/// The same max depth as in the Linux kernel.
 const FDT_MAX_NODE_DEPTH: usize = 64;
 
 /// Interface for writing a Flattened Devicetree (FDT) and emitting a Devicetree Blob (DTB).
