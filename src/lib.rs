@@ -59,6 +59,27 @@
 //!
 //! # let dtb = create_fdt().unwrap();
 //! ```
+//!
+//! The [`phandle`](https://devicetree-specification.readthedocs.io/en/stable/devicetree-basics.html?#phandle)
+//! property should be set using [`FdtWriter::property_phandle`],
+//! so that the value is checked for uniqueness within the devicetree.
+//!
+//! ```rust
+//! use vm_fdt::{Error, FdtWriter};
+//!
+//! fn create_fdt() -> Result<Vec<u8>, Error> {
+//!     let mut fdt = FdtWriter::new()?;
+//!
+//!     let root_node = fdt.begin_node("root")?;
+//!     fdt.property_phandle(1)?;
+//!
+//!     fdt.end_node(root_node)?;
+//!
+//!     fdt.finish()
+//! }
+//!
+//! # let dtb = create_fdt().unwrap();
+//! ```
 
 mod writer;
 

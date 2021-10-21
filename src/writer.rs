@@ -5,7 +5,7 @@
 //! <https://devicetree-specification.readthedocs.io/en/stable/flattened-format.html>
 
 use std::cmp::{Ord, Ordering};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::convert::TryInto;
 use std::ffi::CString;
 use std::fmt;
@@ -43,6 +43,8 @@ pub enum Error {
     InvalidPropertyName,
     /// Node depth exceeds FDT_MAX_NODE_DEPTH
     NodeDepthTooLarge,
+    /// Duplicate phandle property
+    DuplicatePhandle,
 }
 
 impl fmt::Display for Error {
@@ -68,6 +70,7 @@ impl fmt::Display for Error {
             Error::InvalidNodeName => write!(f, "Invalid node name"),
             Error::InvalidPropertyName => write!(f, "Invalid property name"),
             Error::NodeDepthTooLarge => write!(f, "Node depth exceeds FDT_MAX_NODE_DEPTH"),
+            Error::DuplicatePhandle => write!(f, "Duplicate phandle value"),
         }
     }
 }
@@ -94,6 +97,9 @@ pub struct FdtWriter {
     node_depth: usize,
     node_ended: bool,
     boot_cpuid_phys: u32,
+    // The set is used to track the uniqueness of phandle values as required by the spec
+    // https://devicetree-specification.readthedocs.io/en/stable/devicetree-basics.html#phandle
+    phandles: HashSet<u32>,
 }
 
 /// Reserved physical memory region.
@@ -250,6 +256,7 @@ impl FdtWriter {
             node_depth: 0,
             node_ended: false,
             boot_cpuid_phys: 0,
+            phandles: HashSet::new(),
         };
 
         fdt.align(8);
@@ -472,6 +479,16 @@ impl FdtWriter {
             arr.extend(&c.to_be_bytes());
         }
         self.property(name, &arr)
+    }
+
+    /// Write a [`phandle`](https://devicetree-specification.readthedocs.io/en/stable/devicetree-basics.html?#phandle)
+    /// property. The value is checked for uniqueness within the FDT. In the case of a duplicate
+    /// [`Error::DuplicatePhandle`] is returned.
+    pub fn property_phandle(&mut self, val: u32) -> Result<()> {
+        if !self.phandles.insert(val) {
+            return Err(Error::DuplicatePhandle);
+        }
+        self.property("phandle", &val.to_be_bytes())
     }
 
     /// Finish writing the Devicetree Blob (DTB).
@@ -1116,6 +1133,39 @@ mod tests {
         assert_eq!(
             fdt.begin_node("test").unwrap_err(),
             Error::NodeDepthTooLarge
+        );
+    }
+
+    #[test]
+    fn unique_phandles() {
+        let mut fdt = FdtWriter::new().unwrap();
+        let root_node = fdt.begin_node("root").unwrap();
+
+        let prim_node = fdt.begin_node("phandle-1").unwrap();
+        fdt.property_phandle(1).unwrap();
+        fdt.end_node(prim_node).unwrap();
+
+        let prim_node = fdt.begin_node("phandle-2").unwrap();
+        fdt.property_phandle(2).unwrap();
+        fdt.end_node(prim_node).unwrap();
+
+        fdt.end_node(root_node).unwrap();
+        fdt.finish().unwrap();
+    }
+
+    #[test]
+    fn duplicate_phandles() {
+        let mut fdt = FdtWriter::new().unwrap();
+        let _root_node = fdt.begin_node("root").unwrap();
+
+        let prim_node = fdt.begin_node("phandle-1").unwrap();
+        fdt.property_phandle(1).unwrap();
+        fdt.end_node(prim_node).unwrap();
+
+        let _sec_node = fdt.begin_node("phandle-2").unwrap();
+        assert_eq!(
+            fdt.property_phandle(1).unwrap_err(),
+            Error::DuplicatePhandle
         );
     }
 }
