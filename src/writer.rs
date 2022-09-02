@@ -16,7 +16,7 @@ use crate::{
     PROPERTY_NAME_MAX_LEN,
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 /// Errors associated with creating the Flattened Device Tree.
 pub enum Error {
     /// Properties may not be added before beginning a node.
