@@ -467,7 +467,7 @@ impl FdtWriter {
     pub fn property_array_u32(&mut self, name: &str, cells: &[u32]) -> Result<()> {
         let mut arr = Vec::with_capacity(size_of_val(cells));
         for &c in cells {
-            arr.extend(&c.to_be_bytes());
+            arr.extend(c.to_be_bytes());
         }
         self.property(name, &arr)
     }
@@ -476,7 +476,7 @@ impl FdtWriter {
     pub fn property_array_u64(&mut self, name: &str, cells: &[u64]) -> Result<()> {
         let mut arr = Vec::with_capacity(size_of_val(cells));
         for &c in cells {
-            arr.extend(&c.to_be_bytes());
+            arr.extend(c.to_be_bytes());
         }
         self.property(name, &arr)
     }
