@@ -198,11 +198,11 @@ fn node_name_valid(name: &str) -> bool {
 }
 
 fn node_name_valid_char(c: char) -> bool {
-    matches!(c, '0'..='9' | 'a'..='z' | 'A'..='Z' | ',' | '.' | '_' | '+' | '-')
+    c.is_ascii_alphanumeric() || matches!(c, ',' | '.' | '_' | '+' | '-')
 }
 
 fn node_name_valid_first_char(c: char) -> bool {
-    matches!(c, 'a'..='z' | 'A'..='Z')
+    c.is_ascii_alphabetic()
 }
 
 // Check if `name` is a valid property name.
