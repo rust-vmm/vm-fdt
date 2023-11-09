@@ -1,3 +1,9 @@
+# Upcoming Release
+
+## Fixed
+- [[#69](https://github.com/rust-vmm/vm-fdt/pull/69)] Fixed
+  `clippy::incorrect_partial_ord_impl_on_ord_type`.
+
 # v0.2.0
 
 ## Added
