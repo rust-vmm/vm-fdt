@@ -8,7 +8,13 @@ edition = "2018"
 repository = "https://github.com/rust-vmm/vm-fdt"
 keywords = ["fdt"]
 
+[dependencies]
+hashbrown = { version = "0.14", optional = true }
+
 [features]
+default = ["std"]
+std = []
+alloc = ["hashbrown"]
 # This feature was added as a way to exclude long running tests in development.
 # `cargo test` does not run tests for all features by default. The vm-fdt
 # developer can thus choose to "hide" a long running under this feature.

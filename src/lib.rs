@@ -1,6 +1,7 @@
 // Copyright 2021 The Chromium OS Authors. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR BSD-3-Clause
 
+#![cfg_attr(not(feature = "std"), no_std)]
 #![deny(missing_docs)]
 
 //! This crate provides the ability to manipulate Flattened Devicetree blobs.
@@ -80,6 +81,9 @@
 //!
 //! # let dtb = create_fdt().unwrap();
 //! ```
+
+#[macro_use]
+extern crate alloc;
 
 mod writer;
 

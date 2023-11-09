@@ -1,5 +1,9 @@
 # Upcoming Release
 
+## Added
+- [[#68](https://github.com/rust-vmm/vm-fdt/pull/68)] Implemented `no_std`
+  support by adding a default `std` feature.
+
 ## Fixed
 - [[#69](https://github.com/rust-vmm/vm-fdt/pull/69)] Fixed
   `clippy::incorrect_partial_ord_impl_on_ord_type`.
