@@ -1,4 +1,4 @@
-# Upcoming Release
+# v0.3.0
 
 ## Added
 - [[#68](https://github.com/rust-vmm/vm-fdt/pull/68)] Implemented `no_std`
