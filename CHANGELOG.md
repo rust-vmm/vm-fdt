@@ -1,3 +1,12 @@
+# Upcoming Release
+
+## Added
+
+- Added `FdtWriter::property_cstring` method to allow setting `&CStr` string
+  value directly.
+
+## Fixed
+
 # v0.3.0
 
 ## Added
