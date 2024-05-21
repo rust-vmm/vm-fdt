@@ -10,6 +10,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::cmp::{Ord, Ordering};
 use core::convert::TryInto;
+use core::ffi::CStr;
 use core::fmt;
 use core::mem::size_of_val;
 #[cfg(feature = "std")]
@@ -448,7 +449,12 @@ impl FdtWriter {
     /// Write a string property.
     pub fn property_string(&mut self, name: &str, val: &str) -> Result<()> {
         let cstr_value = CString::new(val).map_err(|_| Error::InvalidString)?;
-        self.property(name, cstr_value.to_bytes_with_nul())
+        self.property_cstring(name, &cstr_value)
+    }
+
+    /// Write a C string property.
+    pub fn property_cstring(&mut self, name: &str, val: &CStr) -> Result<()> {
+        self.property(name, val.to_bytes_with_nul())
     }
 
     /// Write a stringlist property.
