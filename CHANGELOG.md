@@ -2,7 +2,8 @@
 
 ## Added
 
-- Added `FdtWriter::property_cstring` method to allow setting `&CStr` string
+- [[#72](https://github.com/rust-vmm/vm-fdt/pull/72)] Added
+  `FdtWriter::property_cstring` method to allow setting `&CStr` string
   value directly.
 
 ## Fixed
