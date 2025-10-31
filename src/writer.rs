@@ -6,7 +6,6 @@
 
 use alloc::collections::BTreeMap;
 use alloc::ffi::CString;
-use alloc::string::String;
 use alloc::vec::Vec;
 use core::cmp::{Ord, Ordering};
 use core::convert::TryInto;
@@ -452,10 +451,26 @@ impl FdtWriter {
     }
 
     /// Write a stringlist property.
-    pub fn property_string_list(&mut self, name: &str, values: Vec<String>) -> Result<()> {
+    pub fn property_string_list<Iter, T>(&mut self, name: &str, values: Iter) -> Result<()>
+    where
+        Iter: IntoIterator<Item = T>,
+        T: Into<Vec<u8>>,
+    {
         let mut bytes = Vec::new();
         for s in values {
             let cstr = CString::new(s).map_err(|_| Error::InvalidString)?;
+            bytes.extend_from_slice(cstr.to_bytes_with_nul());
+        }
+        self.property(name, &bytes)
+    }
+
+    /// Write a stringlist property.
+    pub fn property_cstring_list<Iter>(&mut self, name: &str, values: Iter) -> Result<()>
+    where
+        Iter: IntoIterator<Item = CString>,
+    {
+        let mut bytes = Vec::new();
+        for cstr in values {
             bytes.extend_from_slice(cstr.to_bytes_with_nul());
         }
         self.property(name, &bytes)
@@ -706,7 +721,9 @@ mod tests {
         fdt.property_u32("u32", 0x12345678).unwrap();
         fdt.property_u64("u64", 0x1234567887654321).unwrap();
         fdt.property_string("str", "hello").unwrap();
-        fdt.property_string_list("strlst", vec!["hi".into(), "bye".into()])
+        fdt.property_string_list("strlst", vec!["hi", "bye"])
+            .unwrap();
+        fdt.property_cstring_list("strlst2", vec![CString::new("hi").unwrap(), CString::new("bye").unwrap()])
             .unwrap();
         fdt.property_array_u32("arru32", &[0x12345678, 0xAABBCCDD])
             .unwrap();
@@ -716,14 +733,14 @@ mod tests {
         let actual_fdt = fdt.finish().unwrap();
         let expected_fdt = vec![
             0xd0, 0x0d, 0xfe, 0xed, // 0000: magic (0xd00dfeed)
-            0x00, 0x00, 0x00, 0xee, // 0004: totalsize (0xEE)
+            0x00, 0x00, 0x01, 0x0a, // 0004: totalsize (0x10A)
             0x00, 0x00, 0x00, 0x38, // 0008: off_dt_struct (0x38)
-            0x00, 0x00, 0x00, 0xc8, // 000C: off_dt_strings (0xC8)
+            0x00, 0x00, 0x00, 0xdc, // 000C: off_dt_strings (0xDC)
             0x00, 0x00, 0x00, 0x28, // 0010: off_mem_rsvmap (0x28)
             0x00, 0x00, 0x00, 0x11, // 0014: version (0x11 = 17)
             0x00, 0x00, 0x00, 0x10, // 0018: last_comp_version (0x10 = 16)
             0x00, 0x00, 0x00, 0x00, // 001C: boot_cpuid_phys (0)
-            0x00, 0x00, 0x00, 0x26, // 0020: size_dt_strings (0x26)
+            0x00, 0x00, 0x00, 0x2e, // 0020: size_dt_strings (0x2E)
             0x00, 0x00, 0x00, 0x90, // 0024: size_dt_struct (0x90)
             0x00, 0x00, 0x00, 0x00, // 0028: rsvmap terminator (address = 0 high)
             0x00, 0x00, 0x00, 0x00, // 002C: rsvmap terminator (address = 0 low)
@@ -956,7 +973,7 @@ mod tests {
     #[test]
     fn invalid_prop_string_list_value_nul() {
         let mut fdt = FdtWriter::new().unwrap();
-        let strs = vec!["test".into(), "abc\0def".into()];
+        let strs = vec!["test", "abc\0def"];
         assert_eq!(
             fdt.property_string_list("mystr", strs).unwrap_err(),
             Error::InvalidString
