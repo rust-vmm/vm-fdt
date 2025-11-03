@@ -1,3 +1,7 @@
+# Upcoming
+
+- `fdt.property_string` and `fdt.property_string_list` now accept `String` and `str` parameters.
+
 # v0.3.0
 
 ## Added

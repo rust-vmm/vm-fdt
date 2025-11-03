@@ -6,7 +6,6 @@
 
 use alloc::collections::BTreeMap;
 use alloc::ffi::CString;
-use alloc::string::String;
 use alloc::vec::Vec;
 use core::cmp::{Ord, Ordering};
 use core::convert::TryInto;
@@ -446,16 +445,20 @@ impl FdtWriter {
     }
 
     /// Write a string property.
-    pub fn property_string(&mut self, name: &str, val: &str) -> Result<()> {
-        let cstr_value = CString::new(val).map_err(|_| Error::InvalidString)?;
+    pub fn property_string<S: AsRef<str>>(&mut self, name: &str, val: S) -> Result<()> {
+        let cstr_value = CString::new(val.as_ref()).map_err(|_| Error::InvalidString)?;
         self.property(name, cstr_value.to_bytes_with_nul())
     }
 
     /// Write a stringlist property.
-    pub fn property_string_list(&mut self, name: &str, values: Vec<String>) -> Result<()> {
+    pub fn property_string_list<S: AsRef<str>>(
+        &mut self,
+        name: &str,
+        values: Vec<S>,
+    ) -> Result<()> {
         let mut bytes = Vec::new();
         for s in values {
-            let cstr = CString::new(s).map_err(|_| Error::InvalidString)?;
+            let cstr = CString::new(s.as_ref()).map_err(|_| Error::InvalidString)?;
             bytes.extend_from_slice(cstr.to_bytes_with_nul());
         }
         self.property(name, &bytes)
@@ -706,25 +709,27 @@ mod tests {
         fdt.property_u32("u32", 0x12345678).unwrap();
         fdt.property_u64("u64", 0x1234567887654321).unwrap();
         fdt.property_string("str", "hello").unwrap();
-        fdt.property_string_list("strlst", vec!["hi".into(), "bye".into()])
+        fdt.property_string_list("strlst", vec!["hi", "bye"])
             .unwrap();
         fdt.property_array_u32("arru32", &[0x12345678, 0xAABBCCDD])
             .unwrap();
         fdt.property_array_u64("arru64", &[0x1234567887654321])
             .unwrap();
+        fdt.property_string_list("stringlst", vec![String::from("hi"), String::from("bye")])
+            .unwrap();
         fdt.end_node(root_node).unwrap();
         let actual_fdt = fdt.finish().unwrap();
         let expected_fdt = vec![
             0xd0, 0x0d, 0xfe, 0xed, // 0000: magic (0xd00dfeed)
-            0x00, 0x00, 0x00, 0xee, // 0004: totalsize (0xEE)
+            0x00, 0x00, 0x01, 0x0c, // 0004: totalsize (0x10C)
             0x00, 0x00, 0x00, 0x38, // 0008: off_dt_struct (0x38)
-            0x00, 0x00, 0x00, 0xc8, // 000C: off_dt_strings (0xC8)
+            0x00, 0x00, 0x00, 0xdc, // 000C: off_dt_strings (0xDC)
             0x00, 0x00, 0x00, 0x28, // 0010: off_mem_rsvmap (0x28)
             0x00, 0x00, 0x00, 0x11, // 0014: version (0x11 = 17)
             0x00, 0x00, 0x00, 0x10, // 0018: last_comp_version (0x10 = 16)
             0x00, 0x00, 0x00, 0x00, // 001C: boot_cpuid_phys (0)
-            0x00, 0x00, 0x00, 0x26, // 0020: size_dt_strings (0x26)
-            0x00, 0x00, 0x00, 0x90, // 0024: size_dt_struct (0x90)
+            0x00, 0x00, 0x00, 0x30, // 0020: size_dt_strings (0x30)
+            0x00, 0x00, 0x00, 0xa4, // 0024: size_dt_struct (0xA4)
             0x00, 0x00, 0x00, 0x00, // 0028: rsvmap terminator (address = 0 high)
             0x00, 0x00, 0x00, 0x00, // 002C: rsvmap terminator (address = 0 low)
             0x00, 0x00, 0x00, 0x00, // 0030: rsvmap terminator (size = 0 high)
@@ -763,15 +768,22 @@ mod tests {
             0x00, 0x00, 0x00, 0x1f, // 00B4: prop nameoff (0x1F)
             0x12, 0x34, 0x56, 0x78, // 00B8: prop u64 value 0 high
             0x87, 0x65, 0x43, 0x21, // 00BC: prop u64 value 0 low
-            0x00, 0x00, 0x00, 0x02, // 00C0: FDT_END_NODE
-            0x00, 0x00, 0x00, 0x09, // 00C4: FDT_END
-            b'n', b'u', b'l', b'l', 0x00, // 00C8: strings + 0x00: "null""
-            b'u', b'3', b'2', 0x00, // 00CD: strings + 0x05: "u32"
-            b'u', b'6', b'4', 0x00, // 00D1: strings + 0x09: "u64"
-            b's', b't', b'r', 0x00, // 00D5: strings + 0x0D: "str"
-            b's', b't', b'r', b'l', b's', b't', 0x00, // 00D9: strings + 0x11: "strlst"
-            b'a', b'r', b'r', b'u', b'3', b'2', 0x00, // 00E0: strings + 0x18: "arru32"
-            b'a', b'r', b'r', b'u', b'6', b'4', 0x00, // 00E7: strings + 0x1F: "arru64"
+            0x00, 0x00, 0x00, 0x03, // 00C0: FDT_PROP (string)
+            0x00, 0x00, 0x00, 0x07, // 00C4: prop len (7)
+            0x00, 0x00, 0x00, 0x26, // 00C8: prop nameoff (0x0D)
+            b'h', b'i', 0x00, b'b', // 00CC: prop value ("hi", "bye")
+            b'y', b'e', 0x00, 0x00, // 00D0: "ye\0" + padding
+            0x00, 0x00, 0x00, 0x02, // 00D4: FDT_END_NODE
+            0x00, 0x00, 0x00, 0x09, // 00D8: FDT_END
+            b'n', b'u', b'l', b'l', 0x00, // 00DC: strings + 0x00: "null""
+            b'u', b'3', b'2', 0x00, // 00E1: strings + 0x05: "u32"
+            b'u', b'6', b'4', 0x00, // 00E5: strings + 0x09: "u64"
+            b's', b't', b'r', 0x00, // 00E9: strings + 0x0D: "str"
+            b's', b't', b'r', b'l', b's', b't', 0x00, // 00ED: strings + 0x11: "strlst"
+            b'a', b'r', b'r', b'u', b'3', b'2', 0x00, // 00F4: strings + 0x18: "arru32"
+            b'a', b'r', b'r', b'u', b'6', b'4', 0x00, // 00FB: strings + 0x1F: "arru64"
+            b's', b't', b'r', b'i', b'n', b'g', // 0102: strings + 0x26: "string"
+            b'l', b's', b't', 0x00, // 0108: strings + 0x2c: "lst\0"
         ];
         assert_eq!(expected_fdt, actual_fdt);
     }
@@ -951,12 +963,22 @@ mod tests {
             fdt.property_string("mystr", "abc\0def").unwrap_err(),
             Error::InvalidString
         );
+        assert_eq!(
+            fdt.property_string("mystr", String::from("abc\0def"))
+                .unwrap_err(),
+            Error::InvalidString
+        );
     }
 
     #[test]
     fn invalid_prop_string_list_value_nul() {
         let mut fdt = FdtWriter::new().unwrap();
-        let strs = vec!["test".into(), "abc\0def".into()];
+        let strs = vec!["test", "abc\0def"];
+        assert_eq!(
+            fdt.property_string_list("mystr", strs).unwrap_err(),
+            Error::InvalidString
+        );
+        let strs = vec![String::from("test"), String::from("abc\0def")];
         assert_eq!(
             fdt.property_string_list("mystr", strs).unwrap_err(),
             Error::InvalidString
