@@ -188,9 +188,10 @@ fn node_name_valid(name: &str) -> bool {
         return false;
     }
 
-    // if !node_name.starts_with(node_name_valid_first_char) {
-    //     return false;
-    // }
+    #[cfg(not(feature = "relaxed_checks"))]
+    if !node_name.starts_with(node_name_valid_first_char) {
+        return false;
+    }
 
     if node_name.contains(|c: char| !node_name_valid_char(c)) {
         return false;
