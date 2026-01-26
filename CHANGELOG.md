@@ -11,7 +11,7 @@
 # v0.2.1
 
 ## Added
-- [[#70](https://github.com/rust-vmm/vm-fdt/pull/70)] Added `relaxed_checks` feature
+- [[#79](https://github.com/rust-vmm/vm-fdt/pull/70)] Added `relaxed_checks` feature
   that allows parsing non-standard device trees with node names starting with
   numbers or property names exceeding the standard 31-character limit. This
   enables compatibility with certain vendor-specific device trees that do not

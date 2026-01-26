@@ -1101,7 +1101,6 @@ mod tests {
         // Name missing.
         assert!(!node_name_valid("@1000"));
 
-
         #[cfg(not(feature = "relaxed_checks"))]
         {
             // Name too long.
