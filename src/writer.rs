@@ -210,6 +210,7 @@ fn node_name_valid_char(c: char) -> bool {
     c.is_ascii_alphanumeric() || matches!(c, ',' | '.' | '_' | '+' | '-')
 }
 
+#[allow(dead_code)]
 fn node_name_valid_first_char(c: char) -> bool {
     c.is_ascii_alphabetic()
 }
