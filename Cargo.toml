@@ -15,6 +15,11 @@ hashbrown = { version = "0.14", optional = true }
 default = ["std"]
 std = []
 alloc = ["hashbrown"]
+# Allow relaxed checks for non-standard device trees.
+# When enabled, allows:
+# - Node names that don't start with standard characters
+# - Property names up to 63 characters (spec is 31)
+relaxed_checks = []
 # This feature was added as a way to exclude long running tests in development.
 # `cargo test` does not run tests for all features by default. The vm-fdt
 # developer can thus choose to "hide" a long running under this feature.
