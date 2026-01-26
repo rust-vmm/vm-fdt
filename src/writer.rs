@@ -188,6 +188,7 @@ fn node_name_valid(name: &str) -> bool {
         return false;
     }
 
+    #[cfg(not(feature = "relaxed_checks"))]
     if !node_name.starts_with(node_name_valid_first_char) {
         return false;
     }
@@ -209,6 +210,7 @@ fn node_name_valid_char(c: char) -> bool {
     c.is_ascii_alphanumeric() || matches!(c, ',' | '.' | '_' | '+' | '-')
 }
 
+#[allow(dead_code)]
 fn node_name_valid_first_char(c: char) -> bool {
     c.is_ascii_alphabetic()
 }
@@ -1099,16 +1101,19 @@ mod tests {
         // Name missing.
         assert!(!node_name_valid("@1000"));
 
-        // Name too long.
-        assert!(!node_name_valid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
-        assert!(!node_name_valid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@1234"));
+        #[cfg(not(feature = "relaxed_checks"))]
+        {
+            // Name too long.
+            assert!(!node_name_valid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+            assert!(!node_name_valid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@1234"));
+
+            // Name begins with non-alphabetic character.
+            assert!(!node_name_valid("1abc"));
+        }
 
         // Name contains invalid characters.
         assert!(!node_name_valid("abc#def"));
         assert!(!node_name_valid("abc/def"));
-
-        // Name begins with non-alphabetic character.
-        assert!(!node_name_valid("1abc"));
 
         // Unit address contains invalid characters.
         assert!(!node_name_valid("abcdef@1000#"));
@@ -1120,16 +1125,21 @@ mod tests {
     #[test]
     fn test_property_name_valid() {
         assert!(property_name_valid("abcdef"));
-        assert!(property_name_valid("01234"));
+
+        #[cfg(not(feature = "relaxed_checks"))]
+        {
+            assert!(property_name_valid("01234"));
+
+            // Name too long.
+            assert!(!property_name_valid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+        }
+
         assert!(property_name_valid("azAZ09,._+?#-"));
         assert!(property_name_valid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
 
         // Name contains invalid characters.
         assert!(!property_name_valid("abc!def"));
         assert!(!property_name_valid("abc@1234"));
-
-        // Name too long.
-        assert!(!property_name_valid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
     }
 
     #[test]
