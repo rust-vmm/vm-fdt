@@ -1088,8 +1088,23 @@ mod tests {
         assert!(FdtWriter::new_with_mem_reserv(&non_overlapping).is_ok());
     }
 
-    #[test]
-    fn test_node_name_valid() {
+#[test]
+#[cfg(not(feature = "relaxed_checks"))]
+fn test_node_name_valid() {
+
+#[test]
+#[cfg(feature = "relaxed_checks")]
+fn test_node_name_valid_relaxed() {
+    // 在 relaxed_checks 启用时，应该允许以数字开头的节点名
+    assert!(node_name_valid("1abc"));
+    
+    // 但仍然应该拒绝无效字符
+    assert!(!node_name_valid("abc#def"));
+    assert!(!node_name_valid("abc/def"));
+    
+    // 仍然应该拒绝超过长度限制的节点名
+    assert!(!node_name_valid("a".repeat(32)));
+}
         assert!(node_name_valid("abcdef"));
         assert!(node_name_valid("abcdef@1000"));
         assert!(node_name_valid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
@@ -1119,8 +1134,23 @@ mod tests {
         assert!(!node_name_valid("abc@1000@def"));
     }
 
-    #[test]
-    fn test_property_name_valid() {
+#[test]
+#[cfg(not(feature = "relaxed_checks"))]
+fn test_property_name_valid() {
+
+#[test]
+#[cfg(feature = "relaxed_checks")]
+fn test_property_name_valid_relaxed() {
+    // 在 relaxed_checks 启用时，应该允许更长的属性名
+    assert!(property_name_valid("a".repeat(40)));
+    
+    // 但仍然应该拒绝无效字符
+    assert!(!property_name_valid("abc!def"));
+    assert!(!property_name_valid("abc@1234"));
+    
+    // 仍然应该拒绝超过新长度限制的属性名
+    assert!(!property_name_valid("a".repeat(64)));
+}
         assert!(property_name_valid("abcdef"));
         assert!(property_name_valid("01234"));
         assert!(property_name_valid("azAZ09,._+?#-"));
