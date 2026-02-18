@@ -4,12 +4,14 @@
 //! This module writes Flattened Devicetree blobs as defined here:
 //! <https://devicetree-specification.readthedocs.io/en/stable/flattened-format.html>
 
+use alloc::borrow::Cow;
 use alloc::collections::BTreeMap;
 use alloc::ffi::CString;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::cmp::{Ord, Ordering};
 use core::convert::TryInto;
+use core::ffi::CStr;
 use core::fmt;
 use core::mem::size_of_val;
 #[cfg(feature = "std")]
@@ -215,20 +217,15 @@ fn node_name_valid_first_char(c: char) -> bool {
 
 // Check if `name` is a valid property name.
 // https://devicetree-specification.readthedocs.io/en/stable/devicetree-basics.html#property-names
-fn property_name_valid(name: &str) -> bool {
-    if name.is_empty() || name.len() > PROPERTY_NAME_MAX_LEN {
-        return false;
-    }
-
-    if name.contains(|c: char| !property_name_valid_char(c)) {
-        return false;
-    }
-
-    true
+fn property_name_valid(name: &CStr) -> bool {
+    let name_bytes = name.to_bytes();
+    !(name_bytes.is_empty()
+        || name_bytes.len() > PROPERTY_NAME_MAX_LEN
+        || name_bytes.iter().any(|&c| !property_name_valid_byte(c)))
 }
 
-fn property_name_valid_char(c: char) -> bool {
-    matches!(c, '0'..='9' | 'a'..='z' | 'A'..='Z' | ',' | '.' | '_' | '+' | '?' | '#' | '-')
+fn property_name_valid_byte(c: u8) -> bool {
+    matches!(c, b'0'..=b'9' | b'a'..=b'z' | b'A'..=b'Z' | b',' | b'.' | b'_' | b'+' | b'?' | b'#' | b'-')
 }
 
 /// Handle to an open node created by `FdtWriter::begin_node`.
@@ -390,9 +387,9 @@ impl FdtWriter {
 
     // Find an existing instance of a string `s`, or add it to the strings block.
     // Returns the offset into the strings block.
-    fn intern_string(&mut self, s: CString) -> Result<u32> {
-        if let Some(off) = self.string_offsets.get(&s) {
-            Ok(*off)
+    fn intern_string(&mut self, s: Cow<'_, CStr>) -> Result<u32> {
+        Ok(if let Some(off) = self.string_offsets.get(&*s) {
+            *off
         } else {
             let off = self
                 .strings
@@ -400,9 +397,9 @@ impl FdtWriter {
                 .try_into()
                 .map_err(|_| Error::TotalSizeTooLarge)?;
             self.strings.extend_from_slice(s.to_bytes_with_nul());
-            self.string_offsets.insert(s, off);
-            Ok(off)
-        }
+            self.string_offsets.insert(s.into_owned(), off);
+            off
+        })
     }
 
     /// Write a property.
@@ -422,7 +419,7 @@ impl FdtWriter {
 
         let name_cstr = CString::new(name).map_err(|_| Error::InvalidString)?;
 
-        if !property_name_valid(name) {
+        if !property_name_valid(&name_cstr) {
             return Err(Error::InvalidPropertyName);
         }
 
@@ -431,11 +428,45 @@ impl FdtWriter {
             .try_into()
             .map_err(|_| Error::PropertyValueTooLarge)?;
 
-        let nameoff = self.intern_string(name_cstr)?;
+        let nameoff = self.intern_string(name_cstr.into())?;
         self.append_u32(FDT_PROP);
         self.append_u32(len);
         self.append_u32(nameoff);
         self.data.extend_from_slice(val);
+        self.align(4);
+        Ok(())
+    }
+
+    /// Write a property, but add a NUL byte after `val` and make sure that `val` doesn't contain NUL bytes.
+    /// Otherwise identical to [`FdtWriter::property`].
+    ///
+    /// The purpose of this is to avoid unnecessary intermediate allocations.
+    fn property_and_nul(&mut self, name: Cow<'_, CStr>, val: &[u8]) -> Result<()> {
+        if self.node_ended {
+            return Err(Error::PropertyAfterEndNode);
+        }
+
+        if self.node_depth == 0 {
+            return Err(Error::PropertyBeforeBeginNode);
+        }
+
+        if !property_name_valid(&name) {
+            return Err(Error::InvalidPropertyName);
+        }
+        if val.contains(&0x00) {
+            return Err(Error::InvalidString);
+        }
+
+        let len = (val.len() + 1)
+            .try_into()
+            .map_err(|_| Error::PropertyValueTooLarge)?;
+
+        let nameoff = self.intern_string(name)?;
+        self.append_u32(FDT_PROP);
+        self.append_u32(len);
+        self.append_u32(nameoff);
+        self.data.extend_from_slice(val);
+        self.data.push(0x00);
         self.align(4);
         Ok(())
     }
@@ -447,16 +478,22 @@ impl FdtWriter {
 
     /// Write a string property.
     pub fn property_string(&mut self, name: &str, val: &str) -> Result<()> {
-        let cstr_value = CString::new(val).map_err(|_| Error::InvalidString)?;
-        self.property(name, cstr_value.to_bytes_with_nul())
+        self.property_and_nul(
+            CString::new(name).map_err(|_| Error::InvalidString)?.into(),
+            val.as_bytes(),
+        )
     }
 
     /// Write a stringlist property.
     pub fn property_string_list(&mut self, name: &str, values: Vec<String>) -> Result<()> {
         let mut bytes = Vec::new();
         for s in values {
-            let cstr = CString::new(s).map_err(|_| Error::InvalidString)?;
-            bytes.extend_from_slice(cstr.to_bytes_with_nul());
+            let s = s.as_bytes();
+            if s.contains(&0x00) {
+                return Err(Error::InvalidString);
+            }
+            bytes.extend_from_slice(s);
+            bytes.push(0x00);
         }
         self.property(name, &bytes)
     }
@@ -1119,17 +1156,18 @@ mod tests {
 
     #[test]
     fn test_property_name_valid() {
-        assert!(property_name_valid("abcdef"));
-        assert!(property_name_valid("01234"));
-        assert!(property_name_valid("azAZ09,._+?#-"));
-        assert!(property_name_valid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+        let f = |x: &[u8]| property_name_valid(CStr::from_bytes_with_nul(x).unwrap());
+        assert!(f(b"abcdef\0"));
+        assert!(f(b"01234\0"));
+        assert!(f(b"azAZ09,._+?#-\0"));
+        assert!(f(b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\0"));
 
         // Name contains invalid characters.
-        assert!(!property_name_valid("abc!def"));
-        assert!(!property_name_valid("abc@1234"));
+        assert!(!f(b"abc!def\0"));
+        assert!(!f(b"abc@1234\0"));
 
         // Name too long.
-        assert!(!property_name_valid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+        assert!(!f(b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\0"));
     }
 
     #[test]
